@@ -1,25 +1,149 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Peer-graded Assignment: Course Project 1"
+author: "Giorgia Rauco"
+date: "February 1, 2017"
+output: html_document
 ---
+##Loading and preprocessing the data
 
+First we read the csv input file and we transform the data column into a more readable format.
 
-## Loading and preprocessing the data
+```{r}
+echo = TRUE
 
+activity <- read.csv("activity.csv", header = T, sep = ",")
+activity$date <- as.Date(activity$date, "%Y-%m-%d")
+```
 
+## Analysis
 
-## What is mean total number of steps taken per day?
+### 1. What is the mean total number of steps taken per day?
 
+First we determine the sum of activity steps for a given date and we plots the output in a histogram. And then we compute the mean and median values, adding the corresponding lines to the histogram.
 
+```{r}
+sum_steps <- tapply(activity$steps, activity$date, sum, na.rm=T)
+hist(sum_steps, col = "gray", xlab = "Sum of steps / day", main = "Number of steps per day")
 
-## What is the average daily activity pattern?
+abline(v = median(sum_steps),
+ col = "red",
+ lwd = 2)
 
+abline(v = mean(sum_steps),
+ col = "royalblue",
+ lwd = 2)
 
+legend(x = "topright", 
+ c("Number of steps per day", "Mean", "Median"),
+ col = c("gray", "royalblue", "red"),
+ lwd = c(2, 2, 2))
 
-## Imputing missing values
+print(c("The median is",median(sum_steps)))
+print(c("The (rounded) mean is", round(mean(sum_steps))))
 
+```
 
+### 2. what is the average daily activity pattern ?
 
-## Are there differences in activity patterns between weekdays and weekends?
+We first determine the mean values for the activity steps in function of the 5 minute interval column. We plot the corresponding distribution and compute the maximum average numbers of steps and the related time interval.
+
+```{r}
+mean_int <- tapply(activity$steps, activity$interval, mean, na.rm=T)
+plot(mean_int ~ unique(activity$interval), col="gray", type="l", xlab = "5 min interval", ylab = "Mean number of steps")
+
+abline(h = mean_int[which.max(mean_int)],
+ col = "royalblue",
+ lwd = 2)
+
+legend(x = "topright", 
+ c("Mean number of steps", "Maximum"),
+ col = c("gray", "royalblue"),
+ lwd = c(2, 2))
+
+mean_int[which.max(mean_int)]
+```
+
+The maximum average number of steps is 206 and occurs in time interval #835.
+
+### 3. Imputing missing values
+
+```{r}
+sum(is.na(activity$steps))
+mean(is.na(activity$steps))
+```
+
+About 13% of steps recorded data is missing, corresponding to 2304 entries.
+
+The strategy implemented is the following: for any NA is the step variable, the steps mean of the corresponding interval is taken as the replacing value.
+After a new steps columns is defined for the updated datasets, the corresponding histogram is filled and the mediana and mean values are computed.
+
+```{r}
+activity_noNAs <- activity  
+for (i in 1:nrow(activity)){
+    if(is.na(activity$steps[i])){
+        activity_noNAs$steps[i]<- mean_int[[as.character(activity[i, "interval"])]]
+    }
+}
+
+echo = TRUE
+sum_steps_noNAs <- tapply(activity_noNAs$steps, activity_noNAs$date, sum, na.rm=T)
+hist(sum_steps_noNAs, col = "gray", xlab = "Sum of steps / day", main = "Number of steps per day")
+
+abline(v = median(sum_steps_noNAs),
+ col = "red",
+ lwd = 4)
+
+abline(v = mean(sum_steps_noNAs),
+ col = "royalblue",
+ lwd = 2)
+
+legend(x = "topright", 
+ c("Number of steps per day", "Mean", "Median"),
+ col = c("gray", "royalblue", "red"),
+ lwd = c(2, 2, 2))
+
+print(c("The (rounded) median is", round(median(sum_steps_noNAs))))
+print(c("The (rounded) mean is", round(mean(sum_steps_noNAs))))
+
+```
+
+The mean and median have equal value, which is 10766.
+
+If compared to the distribution which included the NAs value, the main effect of replacing the NAs values is that the distribution is now more sharp and peaked around the central bin. The spread is decreased.
+
+### 4. Are there differences in activity patterns between weekdays and weekends?
+
+First we add a new column weekday, containing a factor whom value depends if it is a weekday or a weekend.
+
+Then we create two sub-datasets, one for each type of day. 
+
+```{r}
+
+activity_splitted <- activity_noNAs
+
+activity_splitted$weekday <- c("weekday")
+activity_splitted[weekdays(as.Date(activity_splitted[, 2])) %in% c("Saturday", "Sunday"), ][4] <- c("weekend")
+table(activity_splitted$weekday == "weekend")
+
+activity_splitted$weekday <- factor(activity_splitted$weekday)
+
+activity_weekend <- subset(activity_splitted, activity_splitted$weekday == "weekend")
+activity_weekday <- subset(activity_splitted, activity_splitted$weekday == "weekday")
+
+mean_weekday <- tapply(activity_weekday$steps, activity_weekday$interval, mean)
+mean_weekend <- tapply(activity_weekend$steps, activity_weekend$interval, mean)
+
+```
+
+We implement two corresponding data_frame and, after having loaded the lattice library, we produce the two pads plots.
+
+```{r}
+library(lattice)
+df_weekday <- data.frame(interval = unique(activity_weekday$interval), avg = as.numeric(mean_weekday), day = rep("weekday", length(mean_weekday)))
+df_weekend <- data.frame(interval = unique(activity_weekend$interval), avg = as.numeric(mean_weekend), day = rep("weekend", length(mean_weekend)))
+df_final <- rbind(df_weekday, df_weekend)
+
+xyplot(avg ~ interval | day, data = df_final, layout = c(1, 2), 
+       type = "l", ylab = "Number of steps")
+
+```
